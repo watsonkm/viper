@@ -20,9 +20,12 @@
         align-items: center;
         justify-content: center;
         background-image: url("img/bg.png");
-        background-size: 400px;
+        background-blend-mode: darken;
+        background-size: 300px;
         background-position: calc(100% - 150px) calc(100% - 150px); 
         background-repeat: repeat;
+        background-color: #ebdee8;
+        background-blend-mode: multiply;
       }
 
       canvas {
@@ -35,7 +38,7 @@
         width: 300px;
         height: 60px;
         border: none;
-        background-color: #efe4ad;
+        background-color: #dacf9b;
         border: 5px solid #a69b68;
         box-shadow: 5px 5px #363636;
         border-radius: 0px;
@@ -50,7 +53,7 @@
   <body>
     <canvas id="display-canvas"></canvas>
     <input type="file" id="rom-selector" style="display: none;"></input>
-    <button onclick="document.getElementById('rom-selector').click();">Load ROM</button>
+    <button onclick="document.getElementById('rom-selector').click();">Load New ROM</button>
     <script src="./bootstrap.js"></script>
   </body>
 </html>

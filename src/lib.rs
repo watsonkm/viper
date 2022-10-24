@@ -25,7 +25,7 @@ extern "C" {
 }
 
 #[wasm_bindgen]
-struct CPU {
+pub struct CPU {
     memory: [u8; MEM_SIZE],
     display: Display,
     pc: u16,
@@ -89,6 +89,18 @@ impl CPU {
         }
 
         disp_text
+    }
+
+    pub fn display_width(&self) -> u16{
+        DISP_WIDTH
+    }
+
+    pub fn display_height(&self) -> u16 {
+        DISP_HEIGHT
+    }
+
+    pub fn display_pixels(&self) -> *const u8 {
+        self.display.as_raw_slice().as_ptr()
     }
 
     fn handle_misc(&mut self, upper: u8, lower: u8) {
