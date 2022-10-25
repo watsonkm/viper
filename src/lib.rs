@@ -228,4 +228,10 @@ mod tests {
 
         println!("{}", cpu.render());
     }
+
+    #[test]
+    fn test_skip_if_equal() {
+        let mut cpu = CPU::new();
+        // TODO: FINISH
+    }
 }

@@ -5,7 +5,7 @@ import { memory } from "viper/viper_bg";
 const FRAME_RELATIVE_SIZE = 0.8;  // frame size relative to window
 const PIXEL_SIZE = 20;            // px, size of each screen pixel in the canvas
 const SCREEN_START_X = 7;         // px 
-const SCREEN_START_Y = 11;        // px
+const SCREEN_START_Y = 7;        // px
 
 // define the canvas
 const canvas = document.getElementById("display-canvas");

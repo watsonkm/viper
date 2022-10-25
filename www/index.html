@@ -9,6 +9,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet"> 
 
     <style>
+      html {
+        height: 100%;
+      }
+
       body {
         position: absolute;
         top: 0;
@@ -19,13 +23,11 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        background-image: url("img/bg.png");
-        background-blend-mode: darken;
-        background-size: 300px;
-        background-position: calc(100% - 150px) calc(100% - 150px); 
-        background-repeat: repeat;
-        background-color: #ebdee8;
-        background-blend-mode: multiply;
+        background-image: url("img/bg.png"); /*radial-gradient(hsl(50, 40%, 25%), hsl(50, 50%, 25%));*/
+        background-position: top 70% left 50%;
+        background-size: 150%;
+        background-repeat: no-repeat;
+        filter: saturate(75%);
       }
 
       canvas {
@@ -35,7 +37,7 @@
       button {
         font-family: 'Press Start 2P', sans-serif;
         color: #161616;
-        width: 300px;
+        width: 150px;
         height: 60px;
         border: none;
         background-color: #dacf9b;
@@ -53,7 +55,7 @@
   <body>
     <canvas id="display-canvas"></canvas>
     <input type="file" id="rom-selector" style="display: none;"></input>
-    <button onclick="document.getElementById('rom-selector').click();">Load New ROM</button>
+    <button onclick="document.getElementById('rom-selector').click();">LOAD ROM</button>
     <script src="./bootstrap.js"></script>
   </body>
 </html>
