@@ -56,7 +56,7 @@ romSelector.addEventListener('change', (event) => {
 
 const displayWidth = cpu.display_width();
 const displayHeight = cpu.display_height();
-const pixelsPtr = cpu.display_pixels();
+const pixelsPtr = cpu.pixels();
 const pixels = new Uint8Array(memory.buffer, pixelsPtr, displayWidth * displayHeight / 8);
 
 const pixelIsOn = (row, col, pixels) => {

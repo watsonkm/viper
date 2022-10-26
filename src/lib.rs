@@ -18,12 +18,7 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 type Display = BitArr!(for (DISP_WIDTH * DISP_HEIGHT) as usize, in u8, Msb0);
 
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = console)]
-    fn log(s: &str);
-}
-
+#[allow(unused)]
 #[wasm_bindgen]
 pub struct CPU {
     memory: [u8; MEM_SIZE],
@@ -65,7 +60,6 @@ impl CPU {
         self.pc += 2;
 
         let long_val = ((upper as u16) << 8 | (lower as u16)) & 0xfff;
-        log(&format!("{:02x} {:02x} {:03x} {:03x}", upper, lower, self.pc, long_val));
 
         match upper >> 4 {
             0x0 => self.handle_misc(upper, lower),
@@ -78,19 +72,6 @@ impl CPU {
         };
     }
 
-    pub fn render(&self) -> String {
-        let mut disp_text: String = String::new();
-
-        for line in self.display.as_bitslice().chunks(DISP_WIDTH as usize) {
-            for bit in line {
-                disp_text.push(if *bit { '⬜' } else { '⬛' });
-            }
-            disp_text.push('\n');
-        }
-
-        disp_text
-    }
-
     pub fn display_width(&self) -> u16{
         DISP_WIDTH
     }
@@ -99,8 +80,12 @@ impl CPU {
         DISP_HEIGHT
     }
 
-    pub fn display_pixels(&self) -> *const u8 {
+    pub fn pixels(&self) -> *const u8 {
         self.display.as_raw_slice().as_ptr()
+    }
+
+    pub fn memory(&self) -> *const u8 {
+        self.memory.as_ptr()
     }
 
     fn handle_misc(&mut self, upper: u8, lower: u8) {
@@ -115,13 +100,10 @@ impl CPU {
         let y = self.var_regs[(lower >> 4) as usize];
         let n = lower & 0xf;
 
-        log(&format!("{} {} {}", x, y, n));
-
         let mut addr: usize = self.index_reg.into();
 
         for i in 0..n {
             let row: u8 = self.memory[addr];
-            log(&format!("{}", row));
             let start: usize = (y + i) as usize * DISP_WIDTH as usize + x as usize;
             self.display[start..(start + 8)] ^= row.view_bits::<Msb0>();
             addr += 1;
@@ -225,13 +207,11 @@ mod tests {
 
         start += DISP_WIDTH as usize;
         assert_eq!(cpu.display[start..(start + 8)].load_be::<u8>(), 0x55);
-
-        println!("{}", cpu.render());
     }
 
     #[test]
     fn test_skip_if_equal() {
-        let mut cpu = CPU::new();
+        let mut _cpu = CPU::new();
         // TODO: FINISH
     }
 }
