@@ -59,13 +59,16 @@ impl CPU {
 
         self.pc += 2;
 
-        let long_val = ((upper as u16) << 8 | (lower as u16)) & 0xfff;
+        let reg_idx: usize = (upper & 0xf) as usize;
+        let long_val: u16 = ((upper as u16) << 8 | (lower as u16)) & 0xfff;
 
         match upper >> 4 {
             0x0 => self.handle_misc(upper, lower),
             0x1 => self.pc = long_val,
-            0x6 => self.var_regs[(upper & 0xf) as usize] = lower,
-            0x7 => self.var_regs[(upper & 0xf) as usize] += lower,
+            0x3 => if self.var_regs[reg_idx] == lower { self.pc += 2 },
+            0x4 => if self.var_regs[reg_idx] != lower { self.pc += 2 },
+            0x6 => self.var_regs[reg_idx] = lower,
+            0x7 => self.var_regs[reg_idx] += lower,
             0xA => self.index_reg = long_val,
             0xD => self.handle_draw(upper, lower),
             _ => (),
@@ -211,7 +214,35 @@ mod tests {
 
     #[test]
     fn test_skip_if_equal() {
-        let mut _cpu = CPU::new();
-        // TODO: FINISH
+        let mut cpu = CPU::new();
+        let img = [0x35, 0xC8];
+
+        cpu.var_regs[0x5] = 0xC7;        
+        cpu.load(&img);
+        cpu.step();
+        assert_eq!(cpu.pc, 0x202);
+
+        cpu = CPU::new();
+        cpu.var_regs[0x5] = 0xC8;
+        cpu.load(&img);
+        cpu.step();
+        assert_eq!(cpu.pc, 0x204);
+    }
+
+    #[test]
+    fn test_skip_if_not_equal() {
+        let mut cpu = CPU::new();
+        let img = [0x45, 0xC8];
+
+        cpu.var_regs[0x5] = 0xC7;        
+        cpu.load(&img);
+        cpu.step();
+        assert_eq!(cpu.pc, 0x204);
+
+        cpu = CPU::new();
+        cpu.var_regs[0x5] = 0xC8;
+        cpu.load(&img);
+        cpu.step();
+        assert_eq!(cpu.pc, 0x202);
     }
 }
