@@ -2,6 +2,7 @@ mod utils;
 
 use crate::utils::set_panic_hook;
 
+use rand::prelude::*;
 use bitvec::prelude::*;
 use wasm_bindgen::prelude::*;
 
@@ -62,22 +63,25 @@ impl CPU {
         let opcode = upper >> 4;
         let reg_idx_a: usize = (upper & 0xf) as usize;
         let reg_idx_b: usize = (lower >> 4) as usize;
-        let long_val: u16 = ((upper as u16) << 8 | (lower as u16)) & 0xfff;
-        let short_val: u8 = lower & 0xf;
+        let addr: u16 = ((upper as u16) << 8 | (lower as u16)) & 0xfff;
+        let opt: u8 = lower & 0xf;
 
         match opcode {
             0x0 => self.handle_misc(upper, lower),
-            0x1 => self.pc = long_val,
+            0x1 => self.pc = addr,
+            0x2 => self.call(addr),
             0x3 => if self.var_regs[reg_idx_a] == lower { self.pc += 2 },
             0x4 => if self.var_regs[reg_idx_a] != lower { self.pc += 2 },
             0x5 => if self.var_regs[reg_idx_a] == self.var_regs[reg_idx_b] { self.pc += 2 },
             0x6 => self.var_regs[reg_idx_a] = lower,
             0x7 => self.var_regs[reg_idx_a] += lower,
-            0x8 => self.handle_assign(reg_idx_a, reg_idx_b, short_val),
+            0x8 => self.handle_assign(reg_idx_a, reg_idx_b, opt),
             0x9 => if self.var_regs[reg_idx_a] != self.var_regs[reg_idx_b] { self.pc += 2 },
-            0xA => self.index_reg = long_val,
-            0xD => self.handle_draw(reg_idx_a, reg_idx_b, short_val),
-            _ => panic!("invalid opcode"),
+            0xA => self.index_reg = addr,
+            0xB => self.pc = self.var_regs[0x0] as u16 + addr,
+            0xC => self.var_regs[reg_idx_a] = rand::thread_rng().gen::<u8>() & lower,
+            0xD => self.handle_draw(reg_idx_a, reg_idx_b, opt),
+            _ => panic!("invalid opcode {}", opcode),
         };
     }
 
@@ -97,18 +101,24 @@ impl CPU {
         self.memory.as_ptr()
     }
 
+    fn call(&mut self, addr: u16) {
+        self.stack.push(self.pc); 
+        self.pc = addr;
+    }
+
     fn handle_misc(&mut self, upper: u8, lower: u8) {
         match (upper, lower) {
             (0x00, 0xE0) => self.display = BitArray::ZERO,
+            (0x00, 0xEE) => self.pc = self.stack.pop().expect("invalid return"),
             _ => panic!("invalid opcode"),
         };
     }
 
-    fn handle_assign(&mut self, reg_idx_a: usize, reg_idx_b: usize, short_val: u8) {
+    fn handle_assign(&mut self, reg_idx_a: usize, reg_idx_b: usize, opt: u8) {
         let reg_val_a = self.var_regs[reg_idx_a];
         let reg_val_b = self.var_regs[reg_idx_b];
 
-        match short_val {
+        match opt {
             0x0 => self.var_regs[reg_idx_a] = reg_val_b,
             0x1 => self.var_regs[reg_idx_a] |= reg_val_b,
             0x2 => self.var_regs[reg_idx_a] &= reg_val_b,
@@ -137,13 +147,13 @@ impl CPU {
         }
     }
 
-    fn handle_draw(&mut self, reg_idx_a: usize, reg_idx_b: usize, short_val: u8) {
+    fn handle_draw(&mut self, reg_idx_a: usize, reg_idx_b: usize, n: u8) {
         let x = self.var_regs[reg_idx_a];
         let y = self.var_regs[reg_idx_b];
 
         let mut addr: usize = self.index_reg.into();
 
-        for i in 0..short_val {
+        for i in 0..n {
             let row: u8 = self.memory[addr];
             let start: usize = (y + i) as usize * DISP_WIDTH as usize + x as usize;
             self.display[start..(start + 8)] ^= row.view_bits::<Msb0>();
@@ -258,13 +268,13 @@ mod tests {
         cpu.var_regs[0x5] = 0xC7;        
         cpu.load(&img);
         cpu.step();
-        assert_eq!(cpu.pc, 0x202);
+        assert_eq!(cpu.pc, START_ADDR + 0x2);
 
         cpu = CPU::new();
         cpu.var_regs[0x5] = 0xC8;
         cpu.load(&img);
         cpu.step();
-        assert_eq!(cpu.pc, 0x204);
+        assert_eq!(cpu.pc, START_ADDR + 0x4);
     }
 
     #[test]
@@ -275,13 +285,13 @@ mod tests {
         cpu.var_regs[0x5] = 0xC7;        
         cpu.load(&img);
         cpu.step();
-        assert_eq!(cpu.pc, 0x204);
+        assert_eq!(cpu.pc, START_ADDR + 0x4);
 
         cpu = CPU::new();
         cpu.var_regs[0x5] = 0xC8;
         cpu.load(&img);
         cpu.step();
-        assert_eq!(cpu.pc, 0x202);
+        assert_eq!(cpu.pc, START_ADDR + 0x2);
     }
 
     #[test]
@@ -293,14 +303,14 @@ mod tests {
         cpu.var_regs[0x6] = 0xB2;
         cpu.load(&img);
         cpu.step();
-        assert_eq!(cpu.pc, 0x204);
+        assert_eq!(cpu.pc, START_ADDR + 0x4);
 
         cpu = CPU::new();
         cpu.var_regs[0xA] = 0xB2;
         cpu.var_regs[0x6] = 0xB3;
         cpu.load(&img);
         cpu.step();
-        assert_eq!(cpu.pc, 0x202);
+        assert_eq!(cpu.pc, START_ADDR + 0x2);
     }
 
     #[test]
@@ -312,14 +322,14 @@ mod tests {
         cpu.var_regs[0x6] = 0xB2;
         cpu.load(&img);
         cpu.step();
-        assert_eq!(cpu.pc, 0x202);
+        assert_eq!(cpu.pc, START_ADDR + 0x2);
 
         cpu = CPU::new();
         cpu.var_regs[0xA] = 0xB2;
         cpu.var_regs[0x6] = 0xB3;
         cpu.load(&img);
         cpu.step();
-        assert_eq!(cpu.pc, 0x204);
+        assert_eq!(cpu.pc, START_ADDR + 0x4);
     }
 
     #[test]
@@ -431,4 +441,52 @@ mod tests {
         assert_eq!(cpu.var_regs[0xB], 0xFE);
         assert_eq!(cpu.var_regs[0xF], 1);       
     }
+
+    #[test]
+    fn test_reg_offset_jump() {
+        let mut cpu = CPU::new();
+        let img = [0xB2, 0x02];
+
+        cpu.var_regs[0x0] = 0x23;
+        cpu.load(&img);
+        cpu.step();
+        assert_eq!(cpu.pc, 0x225);
+    }
+
+    #[test]
+    fn test_random_assign() {
+        let mut cpu = CPU::new();
+        let img = [0xC8, 0xF0];
+
+        cpu.var_regs[0x8] = 0xFF;
+        cpu.load(&img);
+        cpu.step();
+
+        assert_eq!(cpu.var_regs[0x8] & 0xF, 0);
+    }   
+
+    #[test]
+    fn test_call() {
+        let mut cpu = CPU::new();
+        let img = [0x23, 0x45];
+
+        cpu.load(&img);
+        cpu.step();
+
+        assert_eq!(cpu.stack[0], START_ADDR + 0x2);
+        assert_eq!(cpu.pc, 0x345);
+    }   
+
+    #[test]
+    fn test_return() {
+        let mut cpu = CPU::new();
+        let img = [0x00, 0xEE];
+
+        cpu.stack.push(0x369);
+        cpu.load(&img);
+        cpu.step();
+
+        assert_eq!(cpu.pc, 0x369);
+        assert_eq!(cpu.stack.len(), 0);
+    }   
 }

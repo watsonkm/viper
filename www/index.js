@@ -61,11 +61,7 @@ const pixels = new Uint8Array(memory.buffer, pixelsPtr, displayWidth * displayHe
 
 const pixelIsOn = (row, col, pixels) => {
     const idx = row * displayWidth / 8 + Math.floor(col / 8);
-    console.log(`LOC: ${row} ${col}`)
-    console.log(`PIXEL: ${pixels[idx]}`);
     const mask = 1 << (7 - col % 8);
-    console.log(`MASK: ${mask}`);
-    console.log(`RESULT: ${pixels[idx] & mask}`);
     return (pixels[idx] & mask) != 0;
 }
 
@@ -77,7 +73,6 @@ const renderLoop = () => {
     for (let row = 0; row < displayHeight; row++) { 
         for (let col = 0; col < displayWidth; col++) {
             if (pixelIsOn(row, col, pixels)) {
-                console.log(`PIXEL at ${col}`);
                 ctx.fillRect((SCREEN_START_X + col) * PIXEL_SIZE, 
                     (SCREEN_START_Y + row) * PIXEL_SIZE, 
                     PIXEL_SIZE, 
@@ -99,14 +94,6 @@ const renderLoop = () => {
     }
 
     ctx.stroke();
-
-    /* for (let row = 0; row < displayHeight; row++) {
-        for (let col = 0; col < displayWidth; col++) {
-            if pixelIsOn(row, col, displayPtr) {
-                ctx.
-            }
-        }
-    } */
 
     requestAnimationFrame(renderLoop);
 }
