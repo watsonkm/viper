@@ -59,19 +59,25 @@ impl CPU {
 
         self.pc += 2;
 
-        let reg_idx: usize = (upper & 0xf) as usize;
+        let opcode = upper >> 4;
+        let reg_idx_a: usize = (upper & 0xf) as usize;
+        let reg_idx_b: usize = (lower >> 4) as usize;
         let long_val: u16 = ((upper as u16) << 8 | (lower as u16)) & 0xfff;
+        let short_val: u8 = lower & 0xf;
 
-        match upper >> 4 {
+        match opcode {
             0x0 => self.handle_misc(upper, lower),
             0x1 => self.pc = long_val,
-            0x3 => if self.var_regs[reg_idx] == lower { self.pc += 2 },
-            0x4 => if self.var_regs[reg_idx] != lower { self.pc += 2 },
-            0x6 => self.var_regs[reg_idx] = lower,
-            0x7 => self.var_regs[reg_idx] += lower,
+            0x3 => if self.var_regs[reg_idx_a] == lower { self.pc += 2 },
+            0x4 => if self.var_regs[reg_idx_a] != lower { self.pc += 2 },
+            0x5 => if self.var_regs[reg_idx_a] == self.var_regs[reg_idx_b] { self.pc += 2 },
+            0x6 => self.var_regs[reg_idx_a] = lower,
+            0x7 => self.var_regs[reg_idx_a] += lower,
+            0x8 => self.handle_assign(reg_idx_a, reg_idx_b, short_val),
+            0x9 => if self.var_regs[reg_idx_a] != self.var_regs[reg_idx_b] { self.pc += 2 },
             0xA => self.index_reg = long_val,
-            0xD => self.handle_draw(upper, lower),
-            _ => (),
+            0xD => self.handle_draw(reg_idx_a, reg_idx_b, short_val),
+            _ => panic!("invalid opcode"),
         };
     }
 
@@ -98,14 +104,46 @@ impl CPU {
         };
     }
 
-    fn handle_draw(&mut self, upper: u8, lower: u8) {
-        let x = self.var_regs[(upper & 0xf) as usize];
-        let y = self.var_regs[(lower >> 4) as usize];
-        let n = lower & 0xf;
+    fn handle_assign(&mut self, reg_idx_a: usize, reg_idx_b: usize, short_val: u8) {
+        let reg_val_a = self.var_regs[reg_idx_a];
+        let reg_val_b = self.var_regs[reg_idx_b];
+
+        match short_val {
+            0x0 => self.var_regs[reg_idx_a] = reg_val_b,
+            0x1 => self.var_regs[reg_idx_a] |= reg_val_b,
+            0x2 => self.var_regs[reg_idx_a] &= reg_val_b,
+            0x3 => self.var_regs[reg_idx_a] ^= reg_val_b,
+            0x4 => {
+                self.var_regs[0xF] = if reg_val_a > u8::MAX - reg_val_b { 1 } else { 0 };
+                self.var_regs[reg_idx_a] = reg_val_a.wrapping_add(reg_val_b);
+            },
+            0x5 => {
+                self.var_regs[0xF] = if reg_val_a < reg_val_b { 1 } else { 0 };
+                self.var_regs[reg_idx_a] = reg_val_a.wrapping_sub(reg_val_b);
+            },
+            0x6 => {
+                self.var_regs[0xF] = reg_val_a & 0x1;
+                self.var_regs[reg_idx_a] >>= 1;
+            },
+            0x7 => {
+                self.var_regs[0xF] = if reg_val_b < reg_val_a { 1 } else { 0 };
+                self.var_regs[reg_idx_a] = reg_val_b.wrapping_sub(reg_val_a);
+            },
+            0xE => {
+                self.var_regs[0xF] = reg_val_a >> 7;
+                self.var_regs[reg_idx_a] <<= 1;
+            },
+            _ => panic!("invalid opcode"),
+        }
+    }
+
+    fn handle_draw(&mut self, reg_idx_a: usize, reg_idx_b: usize, short_val: u8) {
+        let x = self.var_regs[reg_idx_a];
+        let y = self.var_regs[reg_idx_b];
 
         let mut addr: usize = self.index_reg.into();
 
-        for i in 0..n {
+        for i in 0..short_val {
             let row: u8 = self.memory[addr];
             let start: usize = (y + i) as usize * DISP_WIDTH as usize + x as usize;
             self.display[start..(start + 8)] ^= row.view_bits::<Msb0>();
@@ -244,5 +282,153 @@ mod tests {
         cpu.load(&img);
         cpu.step();
         assert_eq!(cpu.pc, 0x202);
+    }
+
+    #[test]
+    fn test_skip_if_regs_equal() {
+        let mut cpu = CPU::new();
+        let img = [0x5A, 0x60];
+
+        cpu.var_regs[0xA] = 0xB2;
+        cpu.var_regs[0x6] = 0xB2;
+        cpu.load(&img);
+        cpu.step();
+        assert_eq!(cpu.pc, 0x204);
+
+        cpu = CPU::new();
+        cpu.var_regs[0xA] = 0xB2;
+        cpu.var_regs[0x6] = 0xB3;
+        cpu.load(&img);
+        cpu.step();
+        assert_eq!(cpu.pc, 0x202);
+    }
+
+    #[test]
+    fn test_skip_if_regs_not_equal() {
+        let mut cpu = CPU::new();
+        let img = [0x9A, 0x60];
+
+        cpu.var_regs[0xA] = 0xB2;
+        cpu.var_regs[0x6] = 0xB2;
+        cpu.load(&img);
+        cpu.step();
+        assert_eq!(cpu.pc, 0x202);
+
+        cpu = CPU::new();
+        cpu.var_regs[0xA] = 0xB2;
+        cpu.var_regs[0x6] = 0xB3;
+        cpu.load(&img);
+        cpu.step();
+        assert_eq!(cpu.pc, 0x204);
+    }
+
+    #[test]
+    fn test_assign() {
+        let mut cpu = CPU::new();
+        let img = [0x8B, 0xC0];
+
+        cpu.var_regs[0xC] = 0x2C;
+        cpu.load(&img);
+        cpu.step();
+        assert_eq!(cpu.var_regs[0xB], 0x2C);
+    }
+
+    #[test]
+    fn test_or_assign() {
+        let mut cpu = CPU::new();
+        let img = [0x8B, 0xC1];
+
+        cpu.var_regs[0xB] = 0xAA;
+        cpu.var_regs[0xC] = 0x55;
+        cpu.load(&img);
+        cpu.step();
+        assert_eq!(cpu.var_regs[0xB], 0xFF);
+    }
+
+    #[test]
+    fn test_and_assign() {
+        let mut cpu = CPU::new();
+        let img = [0x8B, 0xC2];
+
+        cpu.var_regs[0xB] = 0xAA;
+        cpu.var_regs[0xC] = 0xA5;
+        cpu.load(&img);
+        cpu.step();
+        assert_eq!(cpu.var_regs[0xB], 0xA0);
+    }
+
+    #[test]
+    fn test_xor_assign() {
+        let mut cpu = CPU::new();
+        let img = [0x8B, 0xC3];
+
+        cpu.var_regs[0xB] = 0xAA;
+        cpu.var_regs[0xC] = 0xA5;
+        cpu.load(&img);
+        cpu.step();
+        assert_eq!(cpu.var_regs[0xB], 0x0F);
+    }
+
+    #[test]
+    fn test_add_assign() { 
+        let mut cpu = CPU::new();
+        let img = [0x8B, 0xC4];
+
+        cpu.var_regs[0xB] = 0xF3;
+        cpu.var_regs[0xC] = 0x45;
+        cpu.load(&img);
+        cpu.step();
+        assert_eq!(cpu.var_regs[0xB], 0x38);
+        assert_eq!(cpu.var_regs[0xF], 1);
+    }
+
+    #[test]
+    fn test_sub_assign() { 
+        let mut cpu = CPU::new();
+        let img = [0x8B, 0xC5];
+
+        cpu.var_regs[0xB] = 0x45;
+        cpu.var_regs[0xC] = 0xF3;
+        cpu.load(&img);
+        cpu.step();
+        assert_eq!(cpu.var_regs[0xB], 0x52);
+        assert_eq!(cpu.var_regs[0xF], 1);
+    }
+
+    #[test]
+    fn test_right_shift_assign() {
+        let mut cpu = CPU::new();
+        let img = [0x8B, 0xC6];
+
+        cpu.var_regs[0xB] = 0x45;
+        cpu.load(&img);
+        cpu.step();
+        assert_eq!(cpu.var_regs[0xB], 0x22);
+        assert_eq!(cpu.var_regs[0xF], 1);       
+    }
+
+    #[test]
+    fn test_reverse_sub_assign() { 
+        let mut cpu = CPU::new();
+        let img = [0x8B, 0xC7];
+
+        cpu.var_regs[0xB] = 0xF3;
+        cpu.var_regs[0xC] = 0x45;
+        cpu.load(&img);
+        cpu.step();
+        assert_eq!(cpu.var_regs[0xB], 0x52);
+        assert_eq!(cpu.var_regs[0xF], 1);
+    }
+
+    #[test]
+    fn test_left_shift_assign() {
+        let mut cpu = CPU::new();
+        let img = [0x8B, 0xCE];
+
+        cpu.var_regs[0xB] = 0xFF;
+        cpu.load(&img);
+        cpu.step();
+        assert_eq!(cpu.var_regs[0xB], 0xFE);
+        assert_eq!(cpu.var_regs[0xF], 1);       
     }
 }
