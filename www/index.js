@@ -6,6 +6,8 @@ const FRAME_RELATIVE_SIZE = 0.8;  // frame size relative to window
 const PIXEL_SIZE = 20;            // px, size of each screen pixel in the canvas
 const SCREEN_START_X = 7;         // px 
 const SCREEN_START_Y = 7;        // px
+const PIXEL_OFF_COLOR = "#000000";
+const PIXEL_ON_COLOR = "#FFFFFF";
 
 // define the canvas
 const canvas = document.getElementById("display-canvas");
@@ -41,6 +43,7 @@ const cpu = CPU.new();
 
 const romSelector = document.getElementById('rom-selector');
 
+// whenever we select a new ROM, load it into our CPU
 romSelector.addEventListener('change', (event) => {
     const reader = new FileReader();
     const romFile = event.target.files[0];
@@ -54,22 +57,26 @@ romSelector.addEventListener('change', (event) => {
     reader.readAsArrayBuffer(romFile);
 });
 
+// get the display properties
 const displayWidth = cpu.display_width();
 const displayHeight = cpu.display_height();
 const pixelsPtr = cpu.pixels();
 const pixels = new Uint8Array(memory.buffer, pixelsPtr, displayWidth * displayHeight / 8);
 
+// detect if a given pixel is on
 const pixelIsOn = (row, col, pixels) => {
     const idx = row * displayWidth / 8 + Math.floor(col / 8);
     const mask = 1 << (7 - col % 8);
     return (pixels[idx] & mask) != 0;
 }
 
+// perform the actual rendering
 const renderLoop = () => {
     cpu.step();
     ctx.beginPath();
 
-    ctx.fillStyle = "#FFFFFF";
+    // render the ON pixels
+    ctx.fillStyle = PIXEL_ON_COLOR;
     for (let row = 0; row < displayHeight; row++) { 
         for (let col = 0; col < displayWidth; col++) {
             if (pixelIsOn(row, col, pixels)) {
@@ -81,7 +88,8 @@ const renderLoop = () => {
         }
     }
 
-    ctx.fillStyle = "#000000";
+    // render the OFF pixels
+    ctx.fillStyle = PIXEL_OFF_COLOR;
     for (let row = 0; row < displayHeight; row++) {
         for (let col = 0; col < displayWidth; col++) {
             if (!pixelIsOn(row, col, pixels)) {
@@ -93,7 +101,7 @@ const renderLoop = () => {
         }
     }
 
+    // draw and request next frame
     ctx.stroke();
-
     requestAnimationFrame(renderLoop);
 }
